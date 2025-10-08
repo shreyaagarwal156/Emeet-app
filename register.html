@@ -51,7 +51,7 @@
 </div>
 
 <script>
-    // Ye function Student/Teacher select karne par neeche ke fields badlega
+
     function toggleFields() {
         var userType = document.getElementById('user_type').value;
         if (userType === 'student') {
@@ -62,7 +62,7 @@
             document.getElementById('teacher_fields').style.display = 'block';
         }
     }
-    // Page load hone par ek baar chalao
     window.onload = toggleFields;
 </script>
+
 {% endblock %}
