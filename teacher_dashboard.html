@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Teacher Dashboard - eMeet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .dashboard-container { max-width: 1200px; margin: 2rem auto; }
+        .pending-count { font-weight: bold; font-size: 1.25rem; }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">eMeet Teacher Portal</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('analytics') }}">Analytics 📊</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="dashboard-container">
+        <h2 class="mb-4 text-dark">👋 Welcome, Prof. {{ session.first_name }}!</h2>
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Pending Requests (The Notification Area) -->
+        <div class="card p-4 shadow-sm mb-5 border-warning">
+            <h4 class="card-title text-warning">🔔 New Pending Requests 
+                <span class="badge bg-warning text-dark pending-count">{{ pending_requests|length }}</span>
+            </h4>
+            
+            {% if pending_requests %}
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Student</th>
+                            <th>Req. Time</th>
+                            <th>Reason</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in pending_requests %}
+                        <tr>
+                            <td>{{ req.student_name }}</td>
+                            <td>{{ req.preferred_time.strftime('%b %d, %Y %I:%M %p') }}</td>
+                            <td>{{ req.reason[:50] }}...</td>
+                            <td>
+                                <!-- Review Button opens the modal -->
+                                <button type="button" class="btn btn-sm btn-info" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#actionModal" 
+                                    data-reqid="{{ req.appointment_id }}"
+                                    data-student="{{ req.student_name }}"
+                                    data-reqtime="{{ req.preferred_time.strftime('%Y-%m-%dT%H:%M') }}"
+                                    data-reason="{{ req.reason }}">
+                                    Review/Act
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No pending requests right now. Enjoy your break! 😊</p>
+            {% endif %}
+        </div>
+
+        <!-- All Appointments History -->
+        <h4 class="mt-5 text-dark">All Appointment History</h4>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered">
+                <thead class="table-secondary">
+                    <tr>
+                        <th>Student</th>
+                        <th>Requested Time</th>
+                        <th>Final Status</th>
+                        <th>Comment</th>
+                        <th>Created On</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in all_requests %}
+                    <tr>
+                        <td>{{ req.student_name }}</td>
+                        <td>{{ req.preferred_time.strftime('%b %d, %Y %I:%M %p') }}</td>
+                        <td><span class="badge bg-{% if req.status == 'Approved' %}success{% elif req.status == 'Rejected' %}danger{% elif req.status == 'Rescheduled' %}info{% else %}warning{% endif %}">{{ req.status }}</span></td>
+                        <td>{{ req.teacher_comment or 'N/A' }}</td>
+                        <td>{{ req.created_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Action Modal for Reviewing Requests -->
+    <div class="modal fade" id="actionModal" tabindex="-1" aria-labelledby="actionModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form action="{{ url_for('handle_request') }}" method="POST">
+            <div class="modal-header bg-info text-white">
+              <h5 class="modal-title" id="actionModalLabel">Review Request from <span id="modal-student-name"></span></h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="appointment_id" id="modal-appointment-id">
+                
+                <p><strong>Original Time:</strong> <span id="modal-original-time"></span></p>
+                <p><strong>Reason:</strong> <span id="modal-reason-display"></span></p>
+                <hr>
+
+                <div class="mb-3">
+                    <label class="form-label">Action:</label><br>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="action" id="actionApproved" value="Approved" checked>
+                        <label class="form-check-label" for="actionApproved">Approve (Original Time)</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="action" id="actionRescheduled" value="Rescheduled">
+                        <label class="form-check-label" for="actionRescheduled">Suggest New Time/Venue</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="action" id="actionRejected" value="Rejected">
+                        <label class="form-check-label" for="actionRejected">Reject</label>
+                    </div>
+                </div>
+
+                <!-- Reschedule Options -->
+                <div id="reschedule-options" class="p-3 border rounded mb-3" style="display:none;">
+                    <p class="text-danger">**Please enter the new agreed-upon date/time.**</p>
+                    <div class="mb-3">
+                        <label for="new_time" class="form-label">New Meeting Time</label>
+                        <input type="datetime-local" class="form-control" id="new_time" name="new_time">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="teacher_comment" class="form-label">Comment / Venue Details (Mandatory for Approved/Rescheduled)</label>
+                    <textarea class="form-control" id="teacher_comment" name="teacher_comment" rows="2" required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary" id="confirm-btn">Confirm Action</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // JavaScript to manage the modal display and data population
+        document.addEventListener('DOMContentLoaded', function () {
+            const actionModal = document.getElementById('actionModal');
+            const rescheduleOptions = document.getElementById('reschedule-options');
+            const newTimeInput = document.getElementById('new_time');
+            const commentInput = document.getElementById('teacher_comment');
+            
+            // Function to handle showing/hiding reschedule fields
+            function toggleReschedule() {
+                const action = document.querySelector('input[name="action"]:checked').value;
+                const isRescheduled = action === 'Rescheduled';
+                const isRejected = action === 'Rejected';
+
+                rescheduleOptions.style.display = isRescheduled ? 'block' : 'none';
+                
+                // Requirement Logic
+                if (isRejected) {
+                    commentInput.required = false;
+                    newTimeInput.required = false;
+                } else {
+                    commentInput.required = true;
+                    if(isRescheduled) {
+                        newTimeInput.required = true;
+                    } else {
+                         newTimeInput.required = false;
+                    }
+                }
+            }
+
+            // Event listener for radio buttons
+            document.querySelectorAll('input[name="action"]').forEach(radio => {
+                radio.addEventListener('change', toggleReschedule);
+            });
+            
+            // Modal show event (to populate data)
+            actionModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Get data from the button's data attributes
+                const reqId = button.getAttribute('data-reqid');
+                const studentName = button.getAttribute('data-student');
+                const reqTime = button.getAttribute('data-reqtime');
+                const reason = button.getAttribute('data-reason');
+
+                // Populate modal fields
+                document.getElementById('modal-appointment-id').value = reqId;
+                document.getElementById('modal-student-name').textContent = studentName;
+                document.getElementById('modal-original-time').textContent = new Date(reqTime).toLocaleString();
+                document.getElementById('modal-reason-display').textContent = reason;
+                
+                // Reset to default (Approve)
+                document.getElementById('actionApproved').checked = true;
+                commentInput.value = ''; // Clear previous comment
+                toggleReschedule(); 
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Dashboard - eMeet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .dashboard-container { max-width: 1200px; margin: 2rem auto; }
+        .status-badge-approved { background-color: #28a745; }
+        .status-badge-rejected { background-color: #dc3545; }
+        .status-badge-pending { background-color: #ffc107; }
+        .status-badge-rescheduled { background-color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">eMeet Student Portal</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('analytics') }}">Analytics 📊</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="dashboard-container">
+        <h2 class="mb-4 text-primary">👋 Welcome, {{ session.first_name }}!</h2>
+        
+        <!-- Flash Messages (Use base.html style if you kept the logic there) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Meeting Request Form -->
+        <div class="card p-4 shadow-sm mb-5">
+            <h4 class="card-title text-success">New Appointment Request</h4>
+            <form action="{{ url_for('request_meeting') }}" method="POST">
+                
+                <div class="mb-3">
+                    <label for="teacher_id" class="form-label">Select Teacher</label>
+                    <select class="form-select" id="teacher_id" name="teacher_id" required>
+                        <option value="" disabled selected>--- Choose a Teacher ---</option>
+                        {% for teacher in teachers %}
+                        <option value="{{ teacher.id }}">{{ teacher.name }} ({{ teacher.department }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="preferred_time" class="form-label">Preferred Date and Time</label>
+                    <input type="datetime-local" class="form-control" id="preferred_time" name="preferred_time" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="reason" class="form-label">Reason for Meeting</label>
+                    <textarea class="form-control" id="reason" name="reason" rows="3" required></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-success btn-lg w-100">Submit Request</button>
+            </form>
+        </div>
+
+        <!-- My Requests Table -->
+        <h4 class="mt-5 text-primary">My Appointment Status</h4>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-bordered">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Teacher</th>
+                        <th>Req Time/Date</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Teacher Comment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in my_requests %}
+                    <tr>
+                        <td>{{ req.teacher_name }}</td>
+                        <td>
+                            <!-- preferred_time is the time shown to the student (it might be the rescheduled time) -->
+                            <strong>{{ req.preferred_time.strftime('%b %d, %Y') }}</strong> <br>
+                            {{ req.preferred_time.strftime('%I:%M %p') }}
+                        </td>
+                        <td>{{ req.reason[:100] }}{% if req.reason|length > 100 %}...{% endif %}</td>
+                        <td>
+                            <span class="badge status-badge-{{ req.status | lower }} p-2">{{ req.status }}</span>
+                        </td>
+                        <td>
+                            {% if req.teacher_comment %}
+                                **Comment:** {{ req.teacher_comment }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center">You have not submitted any meeting requests yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
