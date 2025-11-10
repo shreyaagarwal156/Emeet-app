@@ -1,4 +1,4 @@
 Flask
-PyMySQL 
+psycopg2-binary
 bcrypt 
 gunicorn
