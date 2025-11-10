@@ -1,40 +1,28 @@
-import os  # Added for environment variables
+import os
+import psycopg2
+import psycopg2.extras
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-import pymysql
-import pymysql.cursors
 import bcrypt
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# --- CONFIGURATION (MODIFIED FOR PRODUCTION) ---
-
-# Secret key is now read from an environment variable for security
 app.secret_key = os.environ.get('SECRET_KEY', 'a_default_secret_key_for_dev') 
 
-# Database config is now read from environment variables
-# These will be set in the Render dashboard
-app.config['MYSQL_HOST'] = os.environ.get('DB_HOST')
-app.config['MYSQL_USER'] = os.environ.get('DB_USER')
-app.config['MYSQL_PASSWORD'] = os.environ.get('DB_PASSWORD')
-app.config['MYSQL_DB'] = os.environ.get('DB_NAME')
-
-# --- END OF CONFIGURATION ---
-
-
-def get_db_connection_and_cursor(cursor_type=pymysql.cursors.DictCursor):
+def get_db_connection_and_cursor(cursor_type=psycopg2.extras.DictCursor):
     try:
-        # This function now automatically uses the environment variables 
-        # set in app.config above
-        connection = pymysql.connect(
-            host=app.config['MYSQL_HOST'],
-            user=app.config['MYSQL_USER'],
-            password=app.config['MYSQL_PASSWORD'],
-            database=app.config['MYSQL_DB'],
-            cursorclass=cursor_type
-        )
-        return connection, connection.cursor()
-    except pymysql.Error as e:
+        connection_string = os.environ.get('DB_URL')
+        
+        if not connection_string:
+            raise ValueError("DB_URL environment variable is not set.")
+
+        connection = psycopg2.connect(connection_string)
+        
+        connection.autocommit = True 
+
+        return connection, connection.cursor(cursor_factory=cursor_type)
+    
+    except (psycopg2.Error, ValueError) as e:
         print(f"Database Connection Error: {e}")
         flash("Could not connect to the database. Please check configuration.", 'danger')
         return None, None
@@ -94,7 +82,6 @@ def login():
         
     return render_template('login.html')
 
-# --- REGISTRATION PAGE ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -105,7 +92,6 @@ def register():
         raw_password = request.form['password']
         user_type = request.form['user_type']
         
-        # Validation check
         if not first_name or not last_name or not email or not raw_password:
             flash('Please fill in all required fields.', 'danger')
             return redirect(url_for('register'))
@@ -113,7 +99,7 @@ def register():
         
         hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-        conn, cursor = get_db_connection_and_cursor(cursor_type=pymysql.cursors.Cursor)
+        conn, cursor = get_db_connection_and_cursor()
 
         if conn and cursor:
             try:
@@ -144,13 +130,11 @@ def register():
                     cursor.execute('INSERT INTO teachers (first_name, last_name, email, password, department) VALUES (%s, %s, %s, %s, %s)', 
                                 (first_name, last_name, email, hashed_password, department))
                     
-                conn.commit()
                 flash('Registration Successful! Please login.', 'success')
                 return redirect(url_for('login'))
             except Exception as e:
                 
                 print(f"Registration Error: {e}") 
-                conn.rollback()
                 flash(f'Registration failed: {e}', 'danger')
                 return redirect(url_for('register'))
             finally:
@@ -159,7 +143,6 @@ def register():
             
     return render_template('register.html')
 
-# --- DASHBOARD REDIRECTOR ---
 @app.route('/dashboard')
 def dashboard():
     if 'loggedin' in session:
@@ -171,7 +154,6 @@ def dashboard():
     flash('Please login to access this page.', 'warning')
     return redirect(url_for('login'))
 
-# --- STUDENT DASHBOARD LOGIC ---
 @app.route('/student_dashboard')
 def student_dashboard():
     if 'loggedin' not in session or session['user_type'] != 'student':
@@ -230,13 +212,11 @@ def request_meeting():
                 "INSERT INTO appointments (student_id, teacher_id, reason, preferred_time) VALUES (%s, %s, %s, %s)",
                 (student_id, teacher_id, reason, preferred_time)
             )
-            conn.commit()
             flash('Meeting request submitted successfully! Teacher ko notification mil gayi hogi.', 'success')
         except ValueError:
             flash('Invalid date/time format submitted.', 'danger')
         except Exception as e:
             print(f"Request Submission Error: {e}")
-            conn.rollback()
             flash(f'An error occurred during request submission: {e}', 'danger')
         finally:
             cursor.close()
@@ -245,7 +225,6 @@ def request_meeting():
     return redirect(url_for('student_dashboard'))
 
 
-# --- TEACHER DASHBOARD LOGIC ---
 @app.route('/teacher_dashboard')
 def teacher_dashboard():
     if 'loggedin' not in session or session['user_type'] != 'teacher':
@@ -322,12 +301,10 @@ def handle_request():
                 cursor.execute(update_query, (action, comment, appointment_id, session['id']))
                 flash('Request rejected.', 'danger')
                 
-            conn.commit()
         except ValueError:
             flash('Invalid date/time format for rescheduling.', 'danger')
         except Exception as e:
             print(f"Request Handling Error: {e}") 
-            conn.rollback()
             flash(f'An error occurred during request handling: {e}', 'danger')
         finally:
             cursor.close()
@@ -336,7 +313,6 @@ def handle_request():
     return redirect(url_for('teacher_dashboard'))
 
 
-# --- ANALYTICS ROUTE ---
 @app.route('/analytics')
 def analytics():
     if 'loggedin' not in session:
@@ -386,6 +362,3 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
-
-# The if __name__ == '__main__': block has been REMOVED
-# This is correct for production, as gunicorn will run the 'app' object.
