@@ -48,6 +48,7 @@ def login():
                 student = cursor.fetchone()
 
                 if student:
+                    # Check password hash
                     if bcrypt.checkpw(password, student['password'].encode('utf-8')):
                         user_data = student
                         user_type = 'student'
@@ -58,6 +59,7 @@ def login():
                     teacher = cursor.fetchone()
                     
                     if teacher:
+                        # Check password hash
                         if bcrypt.checkpw(password, teacher['password'].encode('utf-8')):
                             user_data = teacher
                             user_type = 'teacher'
@@ -95,13 +97,13 @@ def register():
         user_type = request.form['user_type']
         
         if not first_name or not last_name or not email or not raw_password:
-            flash('Please fill in all required fields.', 'danger')
-            return redirect(url_for('register'))
-            
+             flash('Please fill in all required fields.', 'danger')
+             return redirect(url_for('register'))
+             
         
         hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-        conn, cursor = get_db_connection_and_cursor()
+        conn, cursor = get_db_connection_and_cursor() # Uses default DictCursor here, check if original used Cursor
 
         if conn and cursor:
             try:
@@ -120,7 +122,7 @@ def register():
                         return redirect(url_for('register'))
 
                     cursor.execute('INSERT INTO students (first_name, last_name, email, password, enrollment_no) VALUES (%s, %s, %s, %s, %s)', 
-                                (first_name, last_name, email, hashed_password, enrollment_no))
+                                   (first_name, last_name, email, hashed_password, enrollment_no))
                     
                 elif user_type == 'teacher':
                     
@@ -130,13 +132,15 @@ def register():
                         return redirect(url_for('register'))
 
                     cursor.execute('INSERT INTO teachers (first_name, last_name, email, password, department) VALUES (%s, %s, %s, %s, %s)', 
-                                (first_name, last_name, email, hashed_password, department))
+                                   (first_name, last_name, email, hashed_password, department))
                     
+                # Note: conn.commit() is not needed because autocommit=True
                 flash('Registration Successful! Please login.', 'success')
                 return redirect(url_for('login'))
             except Exception as e:
                 
                 print(f"Registration Error: {e}") 
+                # conn.rollback() is not needed because autocommit=True
                 flash(f'Registration failed: {e}', 'danger')
                 return redirect(url_for('register'))
             finally:
@@ -202,7 +206,7 @@ def request_meeting():
     student_id = session['id']
     teacher_id = request.form['teacher_id']
     reason = request.form['reason']
-    preferred_time_str = request.form['preferred_time']
+    preferred_time_str = request.form['preferred_time'] # <-- THIS WAS THE BROKEN LINE
     
     conn, cursor = get_db_connection_and_cursor()
 
