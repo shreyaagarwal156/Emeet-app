@@ -1,13 +1,15 @@
 import os
 import psycopg2
 import psycopg2.extras
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import (Flask, render_template, request, redirect, 
+                     url_for, session, flash, send_from_directory) # Added send_from_directory
 import bcrypt
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get('SECRET_KEY', 'a_default_secret_key_for_dev') 
+# Use Environment Variables for secret key and database URL
+app.secret_key = os.environ.get('SECRET_KEY') 
 
 def get_db_connection_and_cursor(cursor_type=psycopg2.extras.DictCursor):
     try:
@@ -313,6 +315,7 @@ def handle_request():
     return redirect(url_for('teacher_dashboard'))
 
 
+# --- THIS IS THE CORRECTED ANALYTICS ROUTE ---
 @app.route('/analytics')
 def analytics():
     if 'loggedin' not in session:
@@ -330,6 +333,7 @@ def analytics():
     
     if conn and cursor:
         try:
+            # This first query was already correct
             cursor.execute(f"""
                 SELECT status, COUNT(*) as count 
                 FROM appointments 
@@ -338,10 +342,12 @@ def analytics():
             """, (user_id,))
             status_summary = cursor.fetchall()
 
+            # --- THIS IS THE FIXED QUERY ---
+            # It now uses EXTRACT(YEAR FROM ...) and EXTRACT(MONTH FROM ...)
             cursor.execute(f"""
                 SELECT 
-                    YEAR(created_at) as year, 
-                    MONTH(created_at) as month, 
+                    EXTRACT(YEAR FROM created_at) as year, 
+                    EXTRACT(MONTH FROM created_at) as month, 
                     COUNT(*) as total_requests,
                     SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) as approved_count
                 FROM appointments 
@@ -356,9 +362,23 @@ def analytics():
             conn.close()
     
     return render_template('analytics.html', status_summary=status_summary, monthly_trend=monthly_trend, role=role)
+# --- END OF CORRECTED ANALYTICS ROUTE ---
+
 
 @app.route('/logout')
 def logout():
     session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+
+# --- NEW PWA ROUTES ---
+@app.route('/manifest.json')
+def serve_manifest():
+    # Serves the manifest.json file from the root directory
+    return send_from_directory('.', 'manifest.json')
+
+@app.route('/sw.js')
+def serve_sw():
+    # Serves the sw.js file from the root directory
+    return send_from_directory('.', 'sw.js')
