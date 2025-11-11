@@ -333,17 +333,17 @@ def analytics():
     
     if conn and cursor:
         try:
-            # This first query was already correct
+            # --- THIS IS THE FIXED QUERY ---
+            # It now uses "COUNT(*) as total" to avoid the name collision
             cursor.execute(f"""
-                SELECT status, COUNT(*) as count 
+                SELECT status, COUNT(*) as total 
                 FROM appointments 
                 WHERE {role_field} = %s 
                 GROUP BY status
             """, (user_id,))
             status_summary = cursor.fetchall()
 
-            # --- THIS IS THE FIXED QUERY ---
-            # It now uses EXTRACT(YEAR FROM ...) and EXTRACT(MONTH FROM ...)
+            # This second query was already correct
             cursor.execute(f"""
                 SELECT 
                     EXTRACT(YEAR FROM created_at) as year, 
