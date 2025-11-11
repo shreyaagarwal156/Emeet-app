@@ -10,6 +10,18 @@
         .card-title { font-weight: 600; }
         .card-text { font-size: 2.5rem; }
     </style>
+    
+    <!-- PWA LINKS -->
+    <link rel="manifest" href="{{ url_for('serve_manifest') }}">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register("{{ url_for('serve_sw') }}")
+          .then((reg) => console.log('Service worker registered.', reg))
+          .catch((err) => console.log('Service worker not registered.', err));
+      }
+    </script>
+    <!-- END PWA LINKS -->
+
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-secondary">
@@ -28,12 +40,18 @@
             <div class="col-md-3 mb-3">
                 <div class="card text-white text-center shadow-sm 
                     bg-{% if item.status == 'Approved' %}success
-                        {% elif item.status == 'Rejected' %}danger
-                        {% elif item.status == 'Rescheduled' %}info
-                        {% else %}warning{% endif %}">
+                    {% elif item.status == 'Rejected' %}danger
+                    {% elif item.status == 'Rescheduled' %}info
+                    {% else %}warning{% endif %}">
                     <div class="card-body">
                         <h5 class="card-title">{{ item.status }}</h5>
-                        <p class="card-text">{{ item.count }}</p>
+                        
+                        <!-- 
+                        THIS IS THE FIX!
+                        Changed item.count to item.total
+                        -->
+                        <p class="card-text">{{ item.total }}</p>
+
                     </div>
                 </div>
             </div>
@@ -55,7 +73,11 @@
                 <tbody>
                     {% for trend in monthly_trend %}
                     <tr>
-                        <td>{{ trend.month }}/{{ trend.year }}</td>
+                        <!-- 
+                        FIXED THE DATE DISPLAY:
+                        This will show "11/2025" instead of "11.0/2025.0"
+                        -->
+                        <td>{{ "%.0f" | format(trend.month) }}/{{ "%.0f" | format(trend.year) }}</td>
                         <td>{{ trend.total_requests }}</td>
                         <td>{{ trend.approved_count }}</td>
                         <td>
